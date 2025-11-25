@@ -217,6 +217,11 @@ const App: React.FC = () => {
     return lib && lib.id !== "";
   }, [selectedLibraryName]);
 
+  const envVarHint = React.useMemo(() => {
+    if (!bunnyConfig.libraryId) return null;
+    return `BUNNY_KEY_${bunnyConfig.libraryId.trim()}`;
+  }, [bunnyConfig.libraryId]);
+
   return (
     <div className="min-h-screen font-sans bg-slate-50 text-slate-800">
       <input 
@@ -474,7 +479,12 @@ const App: React.FC = () => {
                   {/* Credentials Row */}
                   <div className="space-y-4">
                     <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-xs text-slate-400">
-                        <strong className="text-slate-300">Security Note:</strong> API Keys are securely managed on the server. Select your library below to begin.
+                        <strong className="text-slate-300">Security Note:</strong> API Keys are securely managed on the server.
+                        {envVarHint && (
+                          <div className="mt-2 pt-2 border-t border-slate-700/50 text-amber-400">
+                             <strong>Required Vercel Env Var:</strong> <code className="bg-slate-900 px-1 py-0.5 rounded text-amber-200 select-all">{envVarHint}</code>
+                          </div>
+                        )}
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
