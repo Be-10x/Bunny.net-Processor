@@ -1,20 +1,22 @@
 import { BunnyChapter } from "../types";
 
 // --- CONFIGURATION ---
-// PASTE YOUR REAL API KEYS AND LIBRARY IDS HERE
+// The IDs must match what you configure in Vercel Environment Variables.
+// Example: If ID is "239218", ensure you have a Vercel Env Var named "BUNNY_KEY_239218"
+
 export const BUNNY_LIBRARIES = [
-  { name: "astro", id: "REPLACE_WITH_ID", apiKey: "REPLACE_WITH_KEY" },
-  { name: "AstroLMS", id: "REPLACE_WITH_ID", apiKey: "REPLACE_WITH_KEY" },
-  { name: "C2C LMS", id: "REPLACE_WITH_ID", apiKey: "REPLACE_WITH_KEY" },
-  { name: "Dr Finance (Presto Public)", id: "REPLACE_WITH_ID", apiKey: "REPLACE_WITH_KEY" },
-  { name: "InfiniteLMS", id: "239218", apiKey: "REPLACE_WITH_KEY" }, // ID from screenshot
-  { name: "Internal Use", id: "REPLACE_WITH_ID", apiKey: "REPLACE_WITH_KEY" },
-  { name: "MadAboutSportsLMS", id: "REPLACE_WITH_ID", apiKey: "REPLACE_WITH_KEY" },
-  { name: "ProfitUniLMS", id: "REPLACE_WITH_ID", apiKey: "REPLACE_WITH_KEY" },
-  { name: "SPRINGPAD (Presto Public)", id: "REPLACE_WITH_ID", apiKey: "REPLACE_WITH_KEY" },
-  { name: "TechGurukul LMS (Presto Public)", id: "REPLACE_WITH_ID", apiKey: "REPLACE_WITH_KEY" },
-  { name: "WDNTV", id: "REPLACE_WITH_ID", apiKey: "REPLACE_WITH_KEY" },
-  { name: "Yogalution LMS", id: "REPLACE_WITH_ID", apiKey: "REPLACE_WITH_KEY" },
+  { name: "astro", id: "275001" },
+  { name: "AstroLMS", id: "275084" },
+  { name: "C2C LMS", id: "257555" },
+  { name: "Dr Finance (Presto Public)", id: "273694" },
+  { name: "InfiniteLMS", id: "239218" }, 
+  { name: "Internal Use", id: "466125" },
+  { name: "MadAboutSportsLMS", id: "253889" },
+  { name: "ProfitUniLMS", id: "243034" },
+  { name: "SPRINGPAD (Presto Public)", id: "286744" },
+  { name: "TechGurukul LMS (Presto Public)", id: "279217" },
+  { name: "WDNTV", id: "248436" },
+  { name: "Yogalution LMS", id: "375077" },
 ];
 
 /**
@@ -25,14 +27,12 @@ export const parseCsvToBunnyChapters = (csvContent: string): BunnyChapter[] => {
   const chapters: BunnyChapter[] = [];
 
   for (const line of lines) {
-    // Regex to match: start,end,title (allowing for commas in title if needed, though simple split is usually safer for this specific format)
-    // Expected format: 123,456,Title Text
+    // Regex to match: start,end,title (allowing for commas in title if needed)
     const parts = line.split(',');
     
     if (parts.length >= 3) {
       const start = parseInt(parts[0].trim(), 10);
       const end = parseInt(parts[1].trim(), 10);
-      // Join the rest back together in case the title has a comma
       const title = parts.slice(2).join(',').trim();
 
       if (!isNaN(start) && !isNaN(end) && title) {
@@ -49,10 +49,11 @@ export const parseCsvToBunnyChapters = (csvContent: string): BunnyChapter[] => {
 };
 
 /**
- * Sends the chapter data to Bunny.net API.
+ * Sends the chapter data to our internal secure API route.
+ * The API route handles the actual authentication with Bunny.net.
  */
 export const updateBunnyChapters = async (
-  apiKey: string,
+  apiKey: string, // Unused in this version, kept for signature compatibility
   libraryId: string,
   videoId: string,
   csvContent: string
@@ -63,29 +64,25 @@ export const updateBunnyChapters = async (
     throw new Error("No valid chapters found in the data.");
   }
 
-  const url = `https://video.bunnycdn.com/library/${libraryId}/videos/${videoId}`;
-  
-  const response = await fetch(url, {
+  if (!libraryId) {
+    throw new Error("Missing Library ID.");
+  }
+
+  // Call our own internal API route (Serverless Function)
+  const response = await fetch('/api/bunny', {
     method: 'POST',
     headers: {
-      'AccessKey': apiKey, // Bunny.net uses AccessKey header
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
     },
     body: JSON.stringify({
-      chapters: chapters
+      libraryId,
+      videoId,
+      chapters
     }),
   });
 
   if (!response.ok) {
-    const errorBody = await response.text();
-    let errorMessage = `API Error (${response.status})`;
-    try {
-      const jsonError = JSON.parse(errorBody);
-      if (jsonError.message) errorMessage = jsonError.message;
-    } catch (e) {
-      // ignore json parse error
-    }
-    throw new Error(`Bunny.net: ${errorMessage}`);
+    const errorData = await response.json();
+    throw new Error(errorData.error || `Server Error (${response.status})`);
   }
 };
