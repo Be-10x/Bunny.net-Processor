@@ -1,9 +1,6 @@
 import { BunnyChapter } from "../types";
 
 // --- CONFIGURATION ---
-// The IDs must match what you configure in Vercel Environment Variables.
-// Example: If ID is "239218", ensure you have a Vercel Env Var named "BUNNY_KEY_239218"
-
 export const BUNNY_LIBRARIES = [
   { name: "astro", id: "275001" },
   { name: "AstroLMS", id: "275084" },
@@ -27,7 +24,6 @@ export const parseCsvToBunnyChapters = (csvContent: string): BunnyChapter[] => {
   const chapters: BunnyChapter[] = [];
 
   for (const line of lines) {
-    // Regex to match: start,end,title (allowing for commas in title if needed)
     const parts = line.split(',');
     
     if (parts.length >= 3) {
@@ -50,10 +46,9 @@ export const parseCsvToBunnyChapters = (csvContent: string): BunnyChapter[] => {
 
 /**
  * Sends the chapter data to our internal secure API route.
- * The API route handles the actual authentication with Bunny.net.
  */
 export const updateBunnyChapters = async (
-  apiKey: string, // Unused in this version, kept for signature compatibility
+  apiKey: string, 
   libraryId: string,
   videoId: string,
   csvContent: string
@@ -71,7 +66,6 @@ export const updateBunnyChapters = async (
   }
 
   try {
-    // Call our own internal API route (Serverless Function)
     const response = await fetch('/api/bunny', {
       method: 'POST',
       headers: {
@@ -85,24 +79,29 @@ export const updateBunnyChapters = async (
     });
 
     const contentType = response.headers.get("content-type");
-    
-    // Check if the response is JSON (API) or HTML (Vite/SPA Fallback usually indicating 404)
-    if (contentType && contentType.indexOf("application/json") === -1) {
-      const text = await response.text();
-      console.error("[BunnyService] Received non-JSON response:", text.substring(0, 150));
-      
-      if (text.includes("<!DOCTYPE html>")) {
-        throw new Error(
-          "API endpoint not found. If you are running locally on 'npm run dev', the backend API will not work. You must deploy to Vercel or use 'vercel dev'."
-        );
-      }
-      throw new Error(`Server returned unexpected content type: ${contentType}`);
+    const text = await response.text();
+
+    // 1. Check for HTML (This is the #1 cause of "Not Working" - it means 404 Not Found)
+    if (text.trim().startsWith("<!DOCTYPE") || text.trim().startsWith("<html")) {
+      console.error("[BunnyService] 404 Error - Backend File Not Found");
+      throw new Error(
+        "CRITICAL ERROR: Backend Function Not Found (404). \n" +
+        "You likely have 'api/bunny.js' inside the 'components' folder. \n" +
+        "Please MOVE 'api/bunny.js' to the ROOT folder (same level as package.json) and Redeploy."
+      );
     }
 
-    const data = await response.json();
+    // 2. Parse JSON
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      throw new Error(`Server returned invalid JSON: ${text.substring(0, 50)}...`);
+    }
 
-    if (!response.ok) {
-      console.error("[BunnyService] API Error Response:", data);
+    // 3. Handle Logic Errors
+    if (!response.ok || data.error) {
+      console.error("[BunnyService] API Error:", data);
       throw new Error(data.error || `Server Error (${response.status})`);
     }
     
@@ -110,6 +109,6 @@ export const updateBunnyChapters = async (
 
   } catch (error: any) {
     console.error("[BunnyService] Network/Logic Error:", error);
-    throw new Error(error.message || "Network request failed. Check console for details.");
+    throw error; // Re-throw so the UI can display it
   }
 };
