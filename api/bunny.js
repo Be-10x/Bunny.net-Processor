@@ -43,16 +43,35 @@ module.exports = async (req, res) => {
     }
 
     // 2. Security Check (Environment Variables)
-    // We construct the key name dynamically based on the library ID selected
-    const envKeyName = `BUNNY_KEY_${libraryId}`;
-    const apiKey = process.env[envKeyName];
+    // STRATEGY: Look for a key that contains the Library ID.
+    // This supports both: "BUNNY_KEY_123456" AND "BUNNY_KEY_NAME_123456"
+    
+    let apiKey = null;
+    let usedEnvKey = null;
 
-    const hasKey = !!apiKey;
-    console.log(`[API] Looking for Env Var: ${envKeyName}. Found? ${hasKey}`);
+    // A. Direct Lookup
+    const directKey = `BUNNY_KEY_${libraryId}`;
+    if (process.env[directKey]) {
+      apiKey = process.env[directKey];
+      usedEnvKey = directKey;
+    } 
+    
+    // B. Scan Lookup (if direct not found)
+    if (!apiKey) {
+      const foundKey = Object.keys(process.env).find(k => 
+        k.startsWith('BUNNY_KEY_') && k.includes(libraryId)
+      );
+      if (foundKey) {
+        apiKey = process.env[foundKey];
+        usedEnvKey = foundKey;
+      }
+    }
+
+    console.log(`[API] Key Lookup for ID ${libraryId}. Found key? ${!!apiKey} (using: ${usedEnvKey || 'none'})`);
 
     if (!apiKey) {
       return res.status(500).json({ 
-        error: `Server Error: API Key for Library ID ${libraryId} not found in environment variables. Please check Vercel Settings.` 
+        error: `Server Error: No Environment Variable found containing Library ID ${libraryId}. Expected format: BUNNY_KEY_NAME_${libraryId}` 
       });
     }
 

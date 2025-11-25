@@ -219,7 +219,9 @@ const App: React.FC = () => {
 
   const envVarHint = React.useMemo(() => {
     if (!bunnyConfig.libraryId) return null;
-    return `BUNNY_KEY_${bunnyConfig.libraryId.trim()}`;
+    const cleanId = bunnyConfig.libraryId.trim();
+    // Hint at the format the user prefers
+    return `BUNNY_KEY_NAME_${cleanId}`;
   }, [bunnyConfig.libraryId]);
 
   return (
