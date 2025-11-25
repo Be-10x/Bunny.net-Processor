@@ -58,31 +58,58 @@ export const updateBunnyChapters = async (
   videoId: string,
   csvContent: string
 ): Promise<void> => {
+  console.log(`[BunnyService] Initiating update for Lib: ${libraryId}, Video: ${videoId}`);
+  
   const chapters = parseCsvToBunnyChapters(csvContent);
 
   if (chapters.length === 0) {
-    throw new Error("No valid chapters found in the data.");
+    throw new Error("No valid chapters found in the data. Please check the CSV format.");
   }
 
   if (!libraryId) {
     throw new Error("Missing Library ID.");
   }
 
-  // Call our own internal API route (Serverless Function)
-  const response = await fetch('/api/bunny', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      libraryId,
-      videoId,
-      chapters
-    }),
-  });
+  try {
+    // Call our own internal API route (Serverless Function)
+    const response = await fetch('/api/bunny', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        libraryId: libraryId.trim(),
+        videoId: videoId.trim(),
+        chapters
+      }),
+    });
 
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || `Server Error (${response.status})`);
+    const contentType = response.headers.get("content-type");
+    
+    // Check if the response is JSON (API) or HTML (Vite/SPA Fallback usually indicating 404)
+    if (contentType && contentType.indexOf("application/json") === -1) {
+      const text = await response.text();
+      console.error("[BunnyService] Received non-JSON response:", text.substring(0, 150));
+      
+      if (text.includes("<!DOCTYPE html>")) {
+        throw new Error(
+          "API endpoint not found. If you are running locally on 'npm run dev', the backend API will not work. You must deploy to Vercel or use 'vercel dev'."
+        );
+      }
+      throw new Error(`Server returned unexpected content type: ${contentType}`);
+    }
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error("[BunnyService] API Error Response:", data);
+      throw new Error(data.error || `Server Error (${response.status})`);
+    }
+    
+    console.log("[BunnyService] Update Success:", data);
+
+  } catch (error: any) {
+    console.error("[BunnyService] Network/Logic Error:", error);
+    throw new Error(error.message || "Network request failed. Check console for details.");
   }
 };

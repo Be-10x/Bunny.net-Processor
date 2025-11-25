@@ -20,7 +20,7 @@ const App: React.FC = () => {
   const [bunnyError, setBunnyError] = useState<string | null>(null);
   const [editableCsv, setEditableCsv] = useState<string>('');
   const [selectedLibraryName, setSelectedLibraryName] = useState<string>('');
-
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingAction, setPendingAction] = useState<'chapters' | 'captions' | null>(null);
 
@@ -153,14 +153,15 @@ const App: React.FC = () => {
     setSelectedLibraryName(libName);
 
     const selectedLib = BUNNY_LIBRARIES.find(lib => lib.name === libName);
+    
     if (selectedLib) {
       setBunnyConfig(prev => ({
         ...prev,
-        apiKey: selectedLib.apiKey,
-        libraryId: selectedLib.id
+        libraryId: selectedLib.id // Will be empty string if not set in code
       }));
+      setBunnyError(null);
     } else {
-      setBunnyConfig(prev => ({ ...prev, apiKey: '', libraryId: '' }));
+      setBunnyConfig(prev => ({ ...prev, libraryId: '' }));
     }
   };
 
@@ -169,22 +170,52 @@ const App: React.FC = () => {
   };
 
   const handleBunnyUpdate = async () => {
-    if (!bunnyConfig.apiKey || !bunnyConfig.libraryId || !bunnyConfig.videoId) {
-      setBunnyError("Please select a library and enter the Video ID.");
+    // 1. Validations
+    if (!bunnyConfig.videoId || !bunnyConfig.videoId.trim()) {
+      setBunnyError("Please enter the Video GUID.");
       return;
     }
 
+    if (!selectedLibraryName) {
+       setBunnyError("Please select a Library.");
+       return;
+    }
+
+    if (!bunnyConfig.libraryId || !bunnyConfig.libraryId.trim()) {
+      setBunnyError(`Library ID is missing. Please select a library with a valid ID or enter it manually.`);
+      return;
+    }
+    
+    if (!editableCsv || !editableCsv.trim()) {
+      setBunnyError("No chapter data to upload.");
+      return;
+    }
+
+    // 2. Start Process
     setBunnyStatus(BunnyStatus.UPLOADING);
     setBunnyError(null);
 
     try {
-      await updateBunnyChapters(bunnyConfig.apiKey, bunnyConfig.libraryId, bunnyConfig.videoId, editableCsv);
+      // Note: We don't pass an API key here. The backend handles it.
+      await updateBunnyChapters(
+        '', 
+        bunnyConfig.libraryId.trim(), 
+        bunnyConfig.videoId.trim(), 
+        editableCsv
+      );
       setBunnyStatus(BunnyStatus.SUCCESS);
     } catch (e: any) {
+      console.error("Bunny Update Caught Error:", e);
       setBunnyStatus(BunnyStatus.ERROR);
       setBunnyError(e.message);
     }
   };
+
+  // Check if the selected library has a hardcoded ID
+  const isIdHardcoded = React.useMemo(() => {
+    const lib = BUNNY_LIBRARIES.find(l => l.name === selectedLibraryName);
+    return lib && lib.id !== "";
+  }, [selectedLibraryName]);
 
   return (
     <div className="min-h-screen font-sans bg-slate-50 text-slate-800">
@@ -436,13 +467,17 @@ const App: React.FC = () => {
             <div className="bg-slate-900 rounded-xl shadow-lg border border-slate-800 overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-800 bg-slate-800/50 flex justify-between items-center">
                 <h3 className="text-lg font-bold text-white">Bunny.net Chapter Update Tool</h3>
-                <span className="text-xs font-medium text-slate-400 bg-slate-800 px-2 py-1 rounded border border-slate-700">Production Ready</span>
+                <span className="text-xs font-medium text-slate-400 bg-slate-800 px-2 py-1 rounded border border-slate-700">Production Ready (Secure Mode)</span>
               </div>
               
               <div className="p-6 space-y-6">
                   {/* Credentials Row */}
                   <div className="space-y-4">
-                    <div className="grid grid-cols-1 gap-4">
+                    <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-xs text-slate-400">
+                        <strong className="text-slate-300">Security Note:</strong> API Keys are securely managed on the server. Select your library below to begin.
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* Library Selector */}
                       <div>
                         <label className="block text-slate-400 text-xs font-bold mb-2">Select Library</label>
@@ -457,21 +492,28 @@ const App: React.FC = () => {
                           ))}
                         </select>
                       </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      
                       <div>
                         <div className="flex justify-between">
                             <label className="block text-slate-400 text-xs font-bold mb-2">Video Library ID</label>
-                            <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mt-0.5">Auto-Set</span>
+                            <span className={`text-[10px] uppercase font-bold tracking-wider mt-0.5 ${isIdHardcoded ? 'text-green-500' : 'text-amber-500'}`}>
+                                {isIdHardcoded ? 'Auto-Set' : 'Manual Entry'}
+                            </span>
                         </div>
                         <input 
                           type="text"
-                          readOnly
+                          readOnly={isIdHardcoded}
                           value={bunnyConfig.libraryId}
-                          className="w-full bg-slate-900/50 border border-slate-800 text-slate-500 rounded px-3 py-2 text-sm focus:outline-none cursor-not-allowed font-mono"
+                          onChange={(e) => handleBunnyConfigChange('libraryId', e.target.value)}
+                          placeholder={selectedLibraryName ? "Enter Library ID" : ""}
+                          className={`w-full bg-slate-900/50 border border-slate-800 text-slate-300 rounded px-3 py-2 text-sm focus:outline-none font-mono
+                            ${isIdHardcoded ? 'text-slate-500 cursor-not-allowed' : 'focus:border-brand-500'}
+                          `}
                         />
                       </div>
+                    </div>
+                    
+                     <div className="grid grid-cols-1">
                         <div>
                         <label className="block text-slate-400 text-xs font-bold mb-2">Video GUID</label>
                         <input 
@@ -482,7 +524,7 @@ const App: React.FC = () => {
                           className="w-full bg-slate-800 border border-slate-700 text-white rounded px-3 py-2 text-sm focus:outline-none focus:border-brand-500 transition-colors placeholder-slate-600"
                         />
                       </div>
-                    </div>
+                     </div>
                   </div>
 
                   {/* Editable CSV Area */}
@@ -526,7 +568,7 @@ const App: React.FC = () => {
                     )}
 
                     {bunnyStatus === BunnyStatus.ERROR && (
-                        <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-sm animate-fade-in">
+                        <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-sm animate-fade-in break-words">
                           <span className="font-bold block mb-1">Update Failed:</span>
                           {bunnyError}
                         </div>
