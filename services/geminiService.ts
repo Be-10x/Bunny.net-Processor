@@ -2,11 +2,9 @@ import { GoogleGenAI } from "@google/genai";
 import { ChapterResult, CaptionResult } from "../types";
 
 const getClient = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    throw new Error("API Key is missing. Please ensure process.env.API_KEY is available.");
-  }
-  return new GoogleGenAI({ apiKey });
+  // The API key must be obtained exclusively from the environment variable process.env.API_KEY.
+  // Assume this variable is pre-configured, valid, and accessible.
+  return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
 /**
@@ -101,12 +99,7 @@ export const generateChapters = async (transcriptText: string): Promise<ChapterR
   try {
     const response = await ai.models.generateContent({
       model: modelId,
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: transcriptText }]
-        }
-      ],
+      contents: transcriptText,
       config: {
         systemInstruction: CHAPTERS_SYSTEM_PROMPT(lastTime),
         temperature: 0.2, // Low temperature for adherence to instructions
@@ -159,12 +152,7 @@ export const cleanCaptions = async (transcriptText: string): Promise<CaptionResu
   try {
     const response = await ai.models.generateContent({
       model: modelId,
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: transcriptText }]
-        }
-      ],
+      contents: transcriptText,
       config: {
         systemInstruction: CAPTIONS_SYSTEM_PROMPT,
         temperature: 0.1,
