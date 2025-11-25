@@ -221,7 +221,7 @@ const App: React.FC = () => {
     if (!bunnyConfig.libraryId) return null;
     const cleanId = bunnyConfig.libraryId.trim();
     // Hint at the format the user prefers
-    return `BUNNY_KEY_NAME_${cleanId}`;
+    return `BUNNY_KEY_NAME_${cleanId} OR BUNNY_API_KEY`;
   }, [bunnyConfig.libraryId]);
 
   return (

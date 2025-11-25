@@ -35,22 +35,26 @@ module.exports = async (req, res) => {
     }
 
     const { libraryId, videoId, chapters } = body || {};
+    // Ensure libraryId is a string for comparison
+    const targetLibId = String(libraryId || '').trim();
 
-    console.log(`[API] Processing Request - Lib: ${libraryId}, Video: ${videoId}`);
+    console.log(`[API] Processing Request - Lib: ${targetLibId}, Video: ${videoId}`);
 
-    if (!libraryId || !videoId || !chapters) {
+    if (!targetLibId || !videoId || !chapters) {
       return res.status(400).json({ error: 'Missing required fields: libraryId, videoId, or chapters.' });
     }
 
     // 2. Security Check (Environment Variables)
-    // STRATEGY: Look for a key that contains the Library ID.
-    // This supports both: "BUNNY_KEY_123456" AND "BUNNY_KEY_NAME_123456"
+    // STRATEGY: 
+    // A. Specific Match: BUNNY_KEY_123456
+    // B. Scan Match: BUNNY_KEY_Anything_123456
+    // C. Global Fallback: BUNNY_API_KEY
     
     let apiKey = null;
     let usedEnvKey = null;
 
     // A. Direct Lookup
-    const directKey = `BUNNY_KEY_${libraryId}`;
+    const directKey = `BUNNY_KEY_${targetLibId}`;
     if (process.env[directKey]) {
       apiKey = process.env[directKey];
       usedEnvKey = directKey;
@@ -59,7 +63,7 @@ module.exports = async (req, res) => {
     // B. Scan Lookup (if direct not found)
     if (!apiKey) {
       const foundKey = Object.keys(process.env).find(k => 
-        k.startsWith('BUNNY_KEY_') && k.includes(libraryId)
+        k.startsWith('BUNNY_KEY_') && k.includes(targetLibId)
       );
       if (foundKey) {
         apiKey = process.env[foundKey];
@@ -67,16 +71,29 @@ module.exports = async (req, res) => {
       }
     }
 
-    console.log(`[API] Key Lookup for ID ${libraryId}. Found key? ${!!apiKey} (using: ${usedEnvKey || 'none'})`);
+    // C. Global Fallback (if specific not found)
+    if (!apiKey && process.env.BUNNY_API_KEY) {
+       apiKey = process.env.BUNNY_API_KEY;
+       usedEnvKey = "BUNNY_API_KEY (Global Fallback)";
+    }
+
+    console.log(`[API] Key Lookup for ID ${targetLibId}. Found? ${!!apiKey} via ${usedEnvKey || 'none'}`);
 
     if (!apiKey) {
+      // DEBUG HELP: List available BUNNY keys (names only) so user can check for typos/deployment issues
+      const visibleKeys = Object.keys(process.env)
+        .filter(k => k.startsWith('BUNNY_'))
+        .join(', ');
+
       return res.status(500).json({ 
-        error: `Server Error: No Environment Variable found containing Library ID ${libraryId}. Expected format: BUNNY_KEY_NAME_${libraryId}` 
+        error: `Server Error: No API Key found for Library ID ${targetLibId}.`,
+        details: `Checked for BUNNY_KEY_${targetLibId} or variables containing '${targetLibId}' or BUNNY_API_KEY.`,
+        availableEnvVars: visibleKeys || "None detected starting with BUNNY_"
       });
     }
 
     // 3. Forward to Bunny.net
-    const url = `https://video.bunnycdn.com/library/${libraryId}/videos/${videoId}`;
+    const url = `https://video.bunnycdn.com/library/${targetLibId}/videos/${videoId}`;
 
     const response = await fetch(url, {
       method: 'POST',
@@ -95,7 +112,8 @@ module.exports = async (req, res) => {
     if (!response.ok) {
       console.error(`[API] Bunny Upstream Error (${response.status}):`, responseText);
       return res.status(response.status).json({ 
-        error: `Bunny.net Refused: ${responseText}` 
+        error: `Bunny.net Refused (Status ${response.status})`,
+        details: responseText
       });
     }
 

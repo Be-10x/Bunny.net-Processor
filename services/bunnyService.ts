@@ -102,7 +102,16 @@ export const updateBunnyChapters = async (
     // 3. Handle Logic Errors
     if (!response.ok || data.error) {
       console.error("[BunnyService] API Error:", data);
-      throw new Error(data.error || `Server Error (${response.status})`);
+      
+      // Construct a helpful error message
+      let msg = data.error || `Server Error (${response.status})`;
+      if (data.availableEnvVars) {
+        msg += `\n[DEBUG] Server sees these keys: ${data.availableEnvVars}`;
+      }
+      if (data.details) {
+        msg += `\n[DETAILS] ${data.details}`;
+      }
+      throw new Error(msg);
     }
     
     console.log("[BunnyService] Update Success:", data);
