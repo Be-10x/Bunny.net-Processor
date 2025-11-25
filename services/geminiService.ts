@@ -1,10 +1,38 @@
 import { GoogleGenAI } from "@google/genai";
 import { ChapterResult, CaptionResult } from "../types";
 
+const getApiKey = (): string => {
+  // 1. Try standard process.env (Node/Webpack/Next.js)
+  if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+    return process.env.API_KEY;
+  }
+  
+  // 2. Try Vite specific (import.meta.env)
+  // We use 'as any' to avoid TS errors if the environment doesn't strictly type import.meta
+  if (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_API_KEY) {
+    return (import.meta as any).env.VITE_API_KEY;
+  }
+
+  // 3. Fallback check for VITE_API_KEY in process.env (sometimes exposed by Vercel/bundlers)
+  if (typeof process !== 'undefined' && process.env && process.env.VITE_API_KEY) {
+    return process.env.VITE_API_KEY;
+  }
+
+  return '';
+};
+
 const getClient = () => {
-  // The API key must be obtained exclusively from the environment variable process.env.API_KEY.
-  // Assume this variable is pre-configured, valid, and accessible.
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getApiKey();
+  
+  if (!apiKey) {
+    console.error("API Key is missing. Checked process.env.API_KEY and VITE_API_KEY.");
+    // We pass an empty string to let the SDK throw its own specific error, 
+    // or we could throw here. The App.tsx handles errors gracefully.
+    // However, the prompt requires using GoogleGenAI constructor. 
+    // If we throw here, the App catches it.
+  }
+
+  return new GoogleGenAI({ apiKey: apiKey });
 };
 
 /**
