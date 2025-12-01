@@ -175,28 +175,57 @@ export const generateChapters = async (transcriptText: string): Promise<ChapterR
 
 export const cleanCaptions = async (transcriptText: string): Promise<CaptionResult> => {
   const ai = getClient();
-  const modelId = "gemini-3-pro-preview";
+
+  // --- STRATEGY: Quality First, Stability Fallback ---
+  // 1. Attempt with Gemini 3 Pro (Better quality).
+  // 2. If it crashes (500 error), automatically fallback to Gemini 2.5 Flash (Better stability).
+
+  const PRO_MODEL = "gemini-3-pro-preview";
+  const FLASH_MODEL = "gemini-2.5-flash";
+
+  let srtContent = "";
 
   try {
+    console.log(`[Caption] Attempting with ${PRO_MODEL}...`);
     const response = await ai.models.generateContent({
-      model: modelId,
+      model: PRO_MODEL,
       contents: transcriptText,
       config: {
         systemInstruction: CAPTIONS_SYSTEM_PROMPT,
         temperature: 0.1,
+        maxOutputTokens: 8192, // Maximize token limit
       },
     });
-
-    let srtContent = response.text || "";
+    srtContent = response.text || "";
+  } catch (error: any) {
+    console.warn(`[Caption] ${PRO_MODEL} failed. Falling back to ${FLASH_MODEL}.`, error);
     
-    // Basic cleanup if the model wraps in code blocks
-    srtContent = srtContent.replace(/^```srt\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "");
-
-    return {
-      srtContent: srtContent.trim()
-    };
-  } catch (error) {
-    console.error("Caption Cleaning Error:", error);
-    throw error;
+    // Fallback Attempt
+    try {
+      const response = await ai.models.generateContent({
+        model: FLASH_MODEL,
+        contents: transcriptText,
+        config: {
+          systemInstruction: CAPTIONS_SYSTEM_PROMPT,
+          temperature: 0.1,
+          maxOutputTokens: 8192,
+        },
+      });
+      srtContent = response.text || "";
+    } catch (fallbackError: any) {
+      console.error(`[Caption] Fallback (${FLASH_MODEL}) also failed.`, fallbackError);
+      throw new Error("Failed to generate captions. Both Pro and Flash models encountered errors. Please check the file length.");
+    }
   }
+
+  if (!srtContent) {
+    throw new Error("AI returned empty content. This usually means the file was too long or the model timed out.");
+  }
+    
+  // Basic cleanup if the model wraps in code blocks
+  srtContent = srtContent.replace(/^```srt\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "");
+
+  return {
+    srtContent: srtContent.trim()
+  };
 };
