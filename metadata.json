@@ -1,0 +1,5 @@
+{
+  "name": "Bunny.net Processor",
+  "description": "An automated tool to generate structured chapters and professional closed captions from Zoom transcripts for Bunny.net and LMS integration.",
+  "requestFramePermissions": []
+}
